@@ -28,6 +28,7 @@ class ResourceConfiguratorHostImpl extends RpcTarget implements ResourceConfigur
     private readonly onSelectionReady: (ready: boolean) => void,
     private readonly onScroll: (deltaX: number, deltaY: number) => void,
     private readonly getInitialResourceImpl: () => { resourceUrl: string; resourceUrlPattern: string } | null,
+    private readonly getAcceptedResourceUrlPatternsImpl: () => readonly string[],
   ) {
     super()
     // The configurator form is short-lived, so a burst past the per-minute cap is always a bug:
@@ -47,6 +48,10 @@ class ResourceConfiguratorHostImpl extends RpcTarget implements ResourceConfigur
 
   async getInitialResource(): Promise<{ resourceUrl: string; resourceUrlPattern: string } | null> {
     return this.getInitialResourceImpl()
+  }
+
+  async getAcceptedResourceUrlPatterns(): Promise<string[]> {
+    return [...this.getAcceptedResourceUrlPatternsImpl()]
   }
 
   resize(height: number, layoutHeight: number): void {
@@ -69,6 +74,7 @@ export default function SandboxedResourceConfigurator({
   onSelectionReadyChange,
   initialResourceUrl,
   resourceUrlPattern,
+  acceptedResourceUrlPatterns,
 }: {
   frame: ResourceConfiguratorFrame,
   topOffset?: number,
@@ -81,6 +87,8 @@ export default function SandboxedResourceConfigurator({
    */
   initialResourceUrl?: string,
   resourceUrlPattern?: string,
+  /** The resource types the caller will accept a URL of (see `getAcceptedResourceUrlPatterns`). */
+  acceptedResourceUrlPatterns: readonly string[],
 }) {
   const { resolvedThemeMode } = useTheme()
   const placeholderRef = useRef<HTMLDivElement>(null)
@@ -111,6 +119,8 @@ export default function SandboxedResourceConfigurator({
   initialResourceRef.current = (initialResourceUrl && resourceUrlPattern)
     ? { resourceUrl: initialResourceUrl, resourceUrlPattern }
     : null
+  const acceptedResourceUrlPatternsRef = useRef(acceptedResourceUrlPatterns)
+  acceptedResourceUrlPatternsRef.current = acceptedResourceUrlPatterns
 
   // Cached scroll ancestor of the placeholder. We rediscover it lazily because the modal DOM is
   // stable for the lifetime of the configurator, so walking up via getComputedStyle on every event is
@@ -226,6 +236,7 @@ export default function SandboxedResourceConfigurator({
         clamp(Number(deltaY) || 0, -SCROLL_FORWARD_MAX_DELTA, SCROLL_FORWARD_MAX_DELTA),
       ),
       () => initialResourceRef.current,
+      () => acceptedResourceUrlPatternsRef.current,
     ))
     rpcSessionRef.current = iframe
     iframeRpcRef.current?.[Symbol.dispose]?.()

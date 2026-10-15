@@ -217,6 +217,7 @@ export const CreationAccountModal = ({ overseer, gatekeeperId, onChoose, onCance
                   disabled={false}
                   onCollectResourceUrlChange={onCollectorChange}
                   onSelectionReadyChange={setConfiguratorReady}
+                  acceptedResourceUrlPatterns={[target.typeUrlPattern]}
                 />
               )}
             </div>

@@ -10,14 +10,18 @@ type Rendered =
   | { ok: false; error: unknown };
 
 const renderModule = (session: ConfiguratorSession, values: ConfiguratorUIValues): Rendered => {
+  const { acceptedResourceUrlPatterns } = session;
   try {
     const tree = session.spec.render({
       values,
       setValues: session.store.setValues,
       clearFields: session.store.clearFields,
       ui: session.ui,
+      acceptedResourceUrlPatterns,
     }) as ReactNode;
-    const ready = session.spec.isReady ? Boolean(session.spec.isReady({ values })) : true;
+    const ready = session.spec.isReady
+      ? Boolean(session.spec.isReady({ values, acceptedResourceUrlPatterns }))
+      : true;
     return { ok: true, tree, ready };
   } catch (error) {
     return { ok: false, error };

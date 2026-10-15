@@ -1796,6 +1796,7 @@ function BlueprintGatekeeperBindingField({
               onSelectionReadyChange={stableOnReadyChange}
               initialResourceUrl={initialResourceUrl}
               resourceUrlPattern={binding.typeUrlPattern}
+              acceptedResourceUrlPatterns={[binding.typeUrlPattern]}
             />
           )}
         </div>
