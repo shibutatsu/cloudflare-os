@@ -25,12 +25,13 @@ export const ComposerModelSelector = ({
       selectedModel.name ?? selectedModel.id;
 
   return (
+    <div className="flex flex-wrap items-center gap-2">
     <DropdownMenu>
       <DropdownMenu.Trigger
         render={
           <button
             type="button"
-            className="group inline-flex h-10 min-w-0 max-w-[110px] cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[14px] leading-5 text-kumo-subtle transition-[background-color,color,transform] duration-150 ease-out hover:bg-kumo-tint hover:text-kumo-default focus-visible:bg-kumo-tint focus-visible:text-kumo-default focus-visible:outline-none active:scale-[0.97] data-[popup-open]:bg-kumo-tint data-[popup-open]:text-kumo-default sm:h-8 sm:max-w-[180px] sm:text-[13px]"
+            className="group inline-flex min-h-11 min-w-0 max-w-[110px] cursor-pointer items-center gap-1.5 rounded-lg px-2 text-base leading-6 text-kumo-default transition-[background-color,color,transform] duration-150 ease-out hover:bg-kumo-tint hover:text-kumo-default focus-visible:bg-kumo-tint focus-visible:text-kumo-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.97] data-[popup-open]:bg-kumo-tint data-[popup-open]:text-kumo-default sm:max-w-[180px]"
             aria-label="Select model"
           >
             <span className="min-w-0 truncate">{selectedModelLabel}</span>
@@ -49,7 +50,7 @@ export const ComposerModelSelector = ({
             <DropdownMenu.Item
               key={model.id}
               onClick={() => onModelChange(model.id)}
-              className="!h-auto rounded-xl !px-2 !py-1.5 text-[12px] leading-4 font-normal tracking-[-0.15px] text-kumo-subtle transition-colors data-highlighted:bg-kumo-tint/70 data-highlighted:text-kumo-default"
+              className="!h-auto min-h-11 rounded-xl !px-2 !py-2 text-base leading-6 font-normal text-kumo-default transition-colors data-highlighted:bg-kumo-tint/70 data-highlighted:text-kumo-default"
             >
               <span className="min-w-0 flex-1 truncate">{model.name}</span>
               {active && (
@@ -65,7 +66,7 @@ export const ComposerModelSelector = ({
         <div className="my-1 border-t border-kumo-line/70" />
         <DropdownMenu.Item
           onClick={() => onModelChange(null)}
-          className="!h-auto rounded-xl !px-2 !py-1.5 text-[12px] leading-4 font-normal tracking-[-0.15px] text-kumo-subtle transition-colors data-highlighted:bg-kumo-tint/70 data-highlighted:text-kumo-default"
+          className="!h-auto min-h-11 rounded-xl !px-2 !py-2 text-base leading-6 font-normal text-kumo-default transition-colors data-highlighted:bg-kumo-tint/70 data-highlighted:text-kumo-default"
         >
           <span className="min-w-0 flex-1 truncate">No agent</span>
           {selectedModel == null && (
@@ -78,5 +79,10 @@ export const ComposerModelSelector = ({
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu>
+    {selectedModel?.id.startsWith('chatgpt:') && <a href="https://chatgpt.com/settings/usage"
+      target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-xs text-kumo-default underline">
+      Using ChatGPT plan · Manage usage
+    </a>}
+    </div>
   );
 };

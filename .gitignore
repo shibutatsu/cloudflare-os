@@ -22,6 +22,7 @@ packages/workshop-backend/src/generated/browser-export-page.js
 # Cloudflare Workers
 .wrangler
 .env
+.chatgpt/
 
 # Local dev secrets (loaded by run-dev-server.ts)
 .dev.vars*

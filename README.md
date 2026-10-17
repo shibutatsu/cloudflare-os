@@ -183,6 +183,10 @@ https://github.com/cloudflare/cloudflare-os-starter
 
 ### Run locally
 
+This fork also supports [local Sign in with ChatGPT and API-key switching](docs/chatgpt-plan.md).
+After `pnpm install`, use `pnpm run-local:chatgpt` to enable the local ChatGPT companion.
+ChatGPT plan usage remains subject to account permissions and usage limits.
+
 To quickly run Cloudflare OS locally, [install pnpm](https://pnpm.io/), then do:
 
     pnpm run-local

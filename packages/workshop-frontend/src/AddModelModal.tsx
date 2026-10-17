@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, Button, Input, Select, Collapsible, useKumoToastManager } from '@cloudflare/kumo'
 import { AiChatAuthorInfo, AiModelProvider, AiGatewayInfo, RedactedAiModelConfig, SUGGESTED_MODELS, modelKind } from '@gadgets/workshop-shared/api'
 import { RpcStub } from 'capnweb'
 import { AuthenticatedApi } from '@gadgets/workshop-shared/api'
+import { ChatGptConnection } from './features/ai-models/ChatGptConnection'
 import { ExtraHeadersEditor } from './features/ai-models/ExtraHeadersEditor'
 import { StoredSecretInput } from './features/ai-models/StoredSecretInput'
 import {
@@ -110,6 +111,8 @@ function buildOptions(gatewayMode: boolean, enabledProviders: Set<string> | null
 
 export default function AddModelModal({ visible, onCancel, onSuccess, authenticatedApi, aiConfig, mode = { type: 'add' }, chatModelsOnly = false }: AddModelModalProps) {
   const toasts = useKumoToastManager()
+  const [connectionMode, setConnectionMode] = useState<'api' | 'chatgpt'>(mode.type !== 'add' && mode.source.config.billingMode === 'chatgpt-plan' ? 'chatgpt' : 'api')
+  const submitting = useRef(false)
 
   // Edit and clone modes take their initial state from the source model, so the caller remounts
   // the modal (with a `key`) to switch source.
@@ -119,7 +122,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
   const [loading, setLoading] = useState(false)
   const [selection, setSelection] = useState<SelectionType | null>(
     source && { type: 'custom', provider: source.config.provider })
-  const [selectValue, setSelectValue] = useState<string | undefined>(undefined)
+  const [selectValue, setSelectValue] = useState<string>('')
 
   // Form fields (used for custom models). A null secret keeps the source's withheld value.
   const [modelId, setModelId] = useState(editing ? source!.config.model : '')
@@ -152,8 +155,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
   // Reset all state when dialog closes
   useEffect(() => {
     if (!visible) {
+      setConnectionMode('api')
       setSelection(null)
-      setSelectValue(undefined)
+      setSelectValue('')
       setModelId('')
       setDisplayName('')
       setApiToken('')
@@ -250,7 +254,8 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
   }
 
   const handleSubmit = async () => {
-    if (!validate()) return
+    if (submitting.current || !validate()) return
+    submitting.current = true
 
     setLoading(true)
     try {
@@ -272,6 +277,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
         provider: selection!.provider,
         model: finalModelId,
         apiToken: gatewayMode ? '' : effectiveApiToken?.trim() ?? null,
+        ...(source?.config.billingMode && { billingMode: source.config.billingMode }),
         ...(!gatewayMode && accountId.trim() && { accountId: accountId.trim() }),
         ...(!gatewayMode && apiUrl.trim() && { apiUrl: apiUrl.trim() }),
         ...(extraHeaders && { extraHeaders }),
@@ -294,6 +300,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
         variant: 'error',
       })
     } finally {
+      submitting.current = false
       setLoading(false)
     }
   }
@@ -320,11 +327,22 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
 
   return (
     <Dialog.Root open={visible} onOpenChange={(open) => { if (!open) onCancel() }}>
-      <Dialog className="responsive-dialog overflow-y-auto p-6" size="lg">
+      <Dialog className="responsive-dialog overflow-y-auto p-6 [&_button]:min-h-11 [&_button]:text-base [&_input]:min-h-11 [&_input]:text-base" size="lg">
         <Dialog.Title className="text-lg font-semibold mb-4">
           {title}
         </Dialog.Title>
 
+        {!source && !gatewayMode && ['localhost', '127.0.0.1'].includes(window.location.hostname) &&
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Connection method">
+            <Button size="lg" className="min-h-11 border border-current aria-pressed:underline aria-pressed:font-semibold aria-pressed:ring-2 aria-pressed:ring-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" aria-pressed={connectionMode === 'api'}
+              variant="secondary" onClick={() => setConnectionMode('api')}>API key · Pay as you go</Button>
+            <Button size="lg" className="min-h-11 border border-current aria-pressed:underline aria-pressed:font-semibold aria-pressed:ring-2 aria-pressed:ring-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" aria-pressed={connectionMode === 'chatgpt'}
+              variant="secondary" onClick={() => setConnectionMode('chatgpt')}>ChatGPT plan</Button>
+          </div>}
+        {connectionMode === 'chatgpt' ? <>
+          <ChatGptConnection authenticatedApi={authenticatedApi} onSuccess={onSuccess} />
+          <div className="mt-4 flex justify-end"><Button size="lg" className="min-h-11 border border-current aria-pressed:underline aria-pressed:font-semibold aria-pressed:ring-2 aria-pressed:ring-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" onClick={onCancel}>Close</Button></div>
+        </> : <>
         <div className="space-y-4">
           {/* Model / Provider selection */}
           {source ? (
@@ -336,7 +354,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
           ) : (
           <Select
             label={gatewayMode ? 'Select Provider' : 'Select Model'}
-            className="w-full text-sm"
+            className="w-full min-w-0 max-w-full text-base"
             placeholder={gatewayMode ? 'Choose a provider...' : 'Choose an AI model...'}
             value={selectValue}
             onValueChange={(v) => handleModelSelect(v as string)}
@@ -370,7 +388,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               <Input
                 label="Model ID"
                 placeholder={`e.g., ${example!.modelId}`}
-                description={`The model identifier as specified by the provider (e.g., '${example!.modelId}')`}
                 value={modelId}
                 disabled={editing}
                 onChange={(e) => { setModelId(e.target.value); setErrors(prev => ({ ...prev, modelId: '' })) }}
@@ -381,7 +398,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               <Input
                 label="Display Name"
                 placeholder={`e.g., ${example!.name}`}
-                description="Human-readable name shown in the UI"
                 value={displayName}
                 onChange={(e) => { setDisplayName(e.target.value); setErrors(prev => ({ ...prev, displayName: '' })) }}
                 error={errors.displayName}
@@ -395,7 +411,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
             <Input
               label="Cloudflare Account ID"
               placeholder="e.g., 0123456789abcdef0123456789abcdef"
-              description="The Cloudflare account to bill for Workers AI usage"
               value={accountId}
               onChange={(e) => { setAccountId(e.target.value); setErrors(prev => ({ ...prev, accountId: '' })) }}
               error={errors.accountId}
@@ -409,15 +424,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               label="API Token"
               stored={storedSecretsUsable && source!.config.apiToken === null}
               placeholder={tokenRequired ? API_TOKEN_PLACEHOLDERS[selection.provider] : '(optional)'}
-              description={
-                isOllama
-                  ? 'Optional for local Ollama access'
-                  : isCloudflare
-                  ? 'An API token with Workers AI Read + Edit permissions (in the dashboard: Workers AI > Use REST API > Create a Workers AI API Token)'
-                  : TOKEN_OPTIONAL_WITH_HEADERS.has(selection.provider)
-                  ? `Your ${PROVIDER_LABELS[selection.provider]} API token for billing. Leave blank if the extra headers under Advanced Settings authenticate you to a proxy that supplies its own key.`
-                  : `Your ${PROVIDER_LABELS[selection.provider]} API token for billing`
-              }
+
               value={effectiveApiToken}
               onValueChange={(v) => { setApiToken(v); setErrors(prev => ({ ...prev, apiToken: '' })) }}
               error={errors.apiToken}
@@ -429,7 +436,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
             <Input
               label="API URL"
               placeholder="http://localhost:11434"
-              description="URL of your Ollama server"
               value={apiUrl}
               onChange={(e) => { setApiUrl(e.target.value); setErrors(prev => ({ ...prev, apiUrl: '' })) }}
               error={errors.apiUrl}
@@ -450,7 +456,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
                     <Input
                       label="API URL"
                       placeholder="https://..."
-                      description="Override the default API endpoint (useful for proxies like Cloudflare AI Gateway)"
                       value={apiUrl}
                       onChange={(e) => setApiUrl(e.target.value)}
                     />
@@ -472,7 +477,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
                     label="Context Window"
                     inputMode="numeric"
                     placeholder="(default)"
-                    description="The maximum tokens one request may total. Leave blank to use the model's built-in default."
                     value={contextWindow}
                     onChange={(e) => { setContextWindow(e.target.value); setErrors(prev => ({ ...prev, contextWindow: '' })) }}
                     error={errors.contextWindow}
@@ -482,7 +486,6 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
                     label="Output Limit"
                     inputMode="numeric"
                     placeholder="(default)"
-                    description="The maximum tokens in one response, also reserved out of the context window. Leave blank to use the model's built-in default."
                     value={outputLimit}
                     onChange={(e) => { setOutputLimit(e.target.value); setErrors(prev => ({ ...prev, outputLimit: '' })) }}
                     error={errors.outputLimit}
@@ -502,7 +505,8 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
             </Button>
           )} />
           <Button
-            variant="primary"
+            variant="secondary"
+            className="border border-current"
             onClick={handleSubmit}
             loading={loading}
             disabled={!selection}
@@ -510,6 +514,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
             {editing ? 'Save Changes' : 'Add Model'}
           </Button>
         </div>
+        </>}
       </Dialog>
     </Dialog.Root>
   )
