@@ -1779,6 +1779,9 @@ export type GatewayModelLevelTest = GatewayModelTest & { reasoning: ReasoningLev
 
 /** Configuration specifying how to connect to an AI model provider. */
 export type AiModelConfig = {
+  /** Local ChatGPT plan routing; never falls back to API-key or AI Gateway billing. */
+  billingMode?: "chatgpt-plan";
+
   /** Which AI provider hosts the model? */
   provider: AiModelProvider;
 

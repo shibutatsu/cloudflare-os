@@ -599,6 +599,13 @@ function signGeminiFunctionCalls(model: Model<Api>, payload: unknown): object | 
 export function getModel(env: Cloudflare.Env, config: AiModelConfig,
                          initiator: AiChatAuthorInfo,
                          options: ModelRoutingOptions = {}): ModelHandle {
+  if (config.billingMode === "chatgpt-plan") {
+    if (config.provider !== "openai" || config.apiUrl !== "http://127.0.0.1:1455/v1" ||
+        config.extraHeaders) {
+      throw new Error("Invalid local ChatGPT connection. Reconnect in AI Providers.");
+    }
+    return getModelDirect(config, options.sessionAffinity);
+  }
   // BYOK: a connected user's own Cloudflare account pays for everything (all providers, including
   // Workers AI), routed through the user's own AI Gateway with unified billing. Honored regardless
   // of whether a platform AI Gateway is configured, so connected users are always billed correctly.
@@ -881,7 +888,7 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
           baseUrl: config.apiUrl ?? "https://api.openai.com/v1",
           reasoning: catalog?.reasoning ?? true,
           input: catalog?.input ?? ["text", "image"],
-          cost: catalog?.cost ?? ZERO_COST,
+          cost: config.billingMode === "chatgpt-plan" ? ZERO_COST : catalog?.cost ?? ZERO_COST,
           ...window,
           thinkingLevelMap: catalog?.thinkingLevelMap,
           compat: catalog?.compat,

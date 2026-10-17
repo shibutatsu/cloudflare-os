@@ -42,6 +42,17 @@ async function userWithModel() {
 }
 
 describe("UserDurableObject model editing", () => {
+  it("uses ChatGPT for auxiliary requests even when an API quick model is saved", async () => {
+    const { user, inDo } = await userWithModel();
+    const plan = { ...CONFIG, billingMode: "chatgpt-plan" as const,
+      apiUrl: "http://127.0.0.1:1455/v1", extraHeaders: undefined };
+    const paid = { ...PROFILE, id: "paid-quick" };
+    await user.addModel(paid, CONFIG);
+    await inDo(u => u.setQuickModel(paid.id));
+    await user.updateModel(PROFILE, plan);
+    const context = await inDo(u => u.getChatContext(PROFILE.id));
+    expect(context.quickModel).toEqual(plan);
+  });
   it("replaces secrets that are supplied, and drops headers that are omitted", async () => {
     const { user, stored } = await userWithModel();
     await user.updateModel(PROFILE, {

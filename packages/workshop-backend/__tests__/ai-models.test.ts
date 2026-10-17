@@ -87,6 +87,26 @@ async function captureRequest(
   return capturedRequests[0];
 }
 
+describe("ChatGPT plan billing isolation", () => {
+  it("routes to the local bridge even when both gateways are configured", async () => {
+    capturedRequests.length = 0;
+    const handle = getModel(env(), {
+      provider: "openai", model: "gpt-5", apiToken: "local-capability",
+      billingMode: "chatgpt-plan", apiUrl: "http://127.0.0.1:1455/v1",
+    }, INITIATOR, { userGateway: { accountId: "paid-account", apiKey: "paid-key" } });
+    const request = await captureRequest(handle);
+    expect(request.url).toBe("http://127.0.0.1:1455/v1/responses");
+    expect(request.headers.get("authorization")).toBe("Bearer local-capability");
+    expect(handle.aiGatewayLogRoute).toBeUndefined();
+  });
+  it("rejects redirection instead of silently billing an API key", () => {
+    expect(() => getModel(env(), {
+      provider: "openai", model: "gpt-5", apiToken: "local-capability",
+      billingMode: "chatgpt-plan", apiUrl: "https://api.openai.com/v1",
+    }, INITIATOR)).toThrow("Invalid local ChatGPT connection");
+  });
+});
+
 describe("getModel AI Gateway routing", () => {
   beforeEach(() => {
     capturedRequests.length = 0;

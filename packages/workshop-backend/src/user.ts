@@ -869,6 +869,12 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
       }
     }
 
+    // A ChatGPT turn must not incur an API-key charge for auxiliary requests either.
+    if (result.aiModel?.config.billingMode === "chatgpt-plan") {
+      result.quickModel = result.aiModel.config;
+      return result;
+    }
+
     // Resolve the quick model (used for lightweight tasks like title generation).
     if (models) {
       // In AI Gateway mode, always use the hardcoded quick model.
