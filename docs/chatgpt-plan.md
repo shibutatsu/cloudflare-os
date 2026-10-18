@@ -29,7 +29,7 @@ Saved registrations are independent even when their email addresses match. Signi
 
 ChatGPT plan usage is subject to account eligibility, granted permissions, model availability and usage limits. It is not unlimited. **Manage usage** opens https://chatgpt.com/settings/usage. Cloudflare hosting and connected external services can have their own charges; this change only routes LLM requests.
 
-The bridge uses streaming, stateless Responses requests and sends the full history. It omits fields not supported by the documented preview and groups local function/custom tools in a namespace. Hosted tools outside that subset are rejected. Completion is accepted only after `response.completed`; incomplete, failed, and interrupted streams become errors. A limit never triggers a paid API fallback. A selected ChatGPT model's local dollar estimate is zero; actual plan usage is managed in ChatGPT, not estimated as API billing.
+The bridge uses streaming, stateless Responses requests and sends the full history. It omits fields not supported by the documented preview, strips API-only cache options and content breakpoints, and groups local function/custom tools in a namespace with its required description. Hosted tools outside that subset are rejected. Completion is accepted only after `response.completed`; incomplete, failed, and interrupted streams become errors. A limit never triggers a paid API fallback. A selected ChatGPT model's local dollar estimate is zero; actual plan usage is managed in ChatGPT, not estimated as API billing.
 
 ## Verification
 
@@ -40,7 +40,7 @@ pnpm --filter @gadgets/workshop-backend exec vitest run __tests__/ai-models.test
 pnpm lint
 ```
 
-The companion tests use a local signed OIDC provider and a local inference server. They verify rejection paths, file permissions, renewal, disconnect, and streaming semantics. They do not establish eligibility or successful inference with a real ChatGPT account. Live sign-in and inference must be verified separately; the accompanying delivery report records that status.
+The companion tests use a local signed OIDC provider and a local inference server. They verify rejection paths, file permissions, renewal, disconnect, and streaming semantics. They do not establish eligibility or successful inference with a real ChatGPT account. Live sign-in, account-specific model discovery, a chat response, and a function-tool round trip with GPT-6.1-Sol were verified on 2026-10-18. Live API-key inference and switching billing modes within one conversation remain unverified.
 
 Official specifications checked on 2026-10-17:
 

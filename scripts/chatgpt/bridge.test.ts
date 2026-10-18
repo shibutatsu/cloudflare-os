@@ -53,6 +53,10 @@ const provider = createServer((req, res) => {
     ] }));
     if (req.url === "/v1/responses") {
       capturedPayload = JSON.parse(body);
+      if (streamMode === "parameter") {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: { code: "invalid_parameter", param: "prompt_cache_options", message: "private provider prose" } }));
+      }
       res.setHeader("Content-Type", "text/event-stream");
       if (streamMode === "interrupted") return res.end('data: {"type":"response.output_text.delta","delta":"partial"}\n\n');
       if (streamMode === "limit") return res.end('data: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}\n\n');
@@ -154,12 +158,13 @@ test("account-specific model catalog excludes hidden models; unknown model canno
 test("plan request preserves full history, groups tools, and omits unsupported fields", async () => {
   const payload = { model: "test-model", input: [{ role: "system", content: "system" }, { role: "user", content: "hi" }],
     tools: [{ type: "function", name: "executeCode", parameters: { type: "object" } }],
-    max_output_tokens: 100, store: true, stream: false, temperature: 1, previous_response_id: "old" };
+    max_output_tokens: 100, store: true, stream: false, temperature: 1, previous_response_id: "old",
+    prompt_cache_options: { mode: "explicit" } };
   const response = await fetch(`${bridge.origin}/v1/responses`, { method: "POST",
     headers: { Authorization: `Bearer ${proxyKey}` }, body: JSON.stringify(payload) });
   assert.match(await response.text(), /response.completed/);
   assert.deepEqual(capturedPayload, { model: "test-model", input: [{ role: "developer", content: "system" }, { role: "user", content: "hi" }],
-    store: false, stream: true, tools: [{ type: "namespace", name: "cloudflare_os", tools: payload.tools }] });
+    store: false, stream: true, tools: [{ type: "namespace", name: "cloudflare_os", description: "Cloudflare OS local tools.", tools: payload.tools }] });
   assert.throws(() => planPayload({ model: "m", input: [], tools: [{ type: "tool_search" }] }));
 });
 for (const mode of ["interrupted", "limit", "incomplete"]) {
@@ -215,4 +220,22 @@ test("logout clears tokens, refuses inference, and retains registration on revoc
   assert.equal((await callback(retry.attemptId, "oaiapp_retry")).status, 200);
   const saved = JSON.parse(await readFile(join(directory, "credentials.json"), "utf8"));
   assert.equal(saved.pendingClientId, undefined);
+});
+
+test("HTTP rejection exposes only structured code and field, never provider prose", async () => {
+  streamMode = "parameter";
+  const response = await fetch(`${bridge.origin}/v1/responses`, { method: "POST",
+    headers: { Authorization: `Bearer ${proxyKey}` }, body: JSON.stringify({ model: "test-model", input: [] }) });
+  assert.equal(response.status, 400);
+  const text = await response.text();
+  assert.match(text, /invalid_parameter \/ prompt_cache_options/);
+  assert.doesNotMatch(text, /private provider prose/);
+});
+
+test("plan payload removes API cache breakpoints without altering prompt text or the caller's input", () => {
+  const input = [{ role: "system", content: [{ type: "input_text", text: "literal prompt_cache_breakpoint", prompt_cache_breakpoint: { mode: "explicit" } }] }];
+  const payload = planPayload({ model: "m", input, prompt_cache_options: { mode: "explicit" } });
+  assert.deepEqual(payload.input, [{ role: "developer", content: [{ type: "input_text", text: "literal prompt_cache_breakpoint" }] }]);
+  assert.equal(payload.prompt_cache_options, undefined);
+  assert.ok(input[0].content[0].prompt_cache_breakpoint);
 });

@@ -39,14 +39,20 @@ export function planPayload(input: unknown): Record<string, unknown> {
   }
   const result: Record<string, unknown> = { ...body, store: false, stream: true };
   for (const key of ["background", "conversation", "max_output_tokens", "max_tool_calls",
-    "metadata", "moderation", "multi_agent", "prompt", "prompt_cache_retention",
+    "metadata", "moderation", "multi_agent", "prompt", "prompt_cache_retention", "prompt_cache_options",
     "safety_identifier", "temperature", "top_logprobs", "top_p", "truncation", "user",
     "previous_response_id"]) delete (result as Record<string, unknown>)[key];
   body.input = body.input.map(item => {
-    if (item && typeof item === "object" && "role" in item && item.role === "system") {
-      return { ...item, role: "developer" };
-    }
-    return item;
+    if (!item || typeof item !== "object") return item;
+    const message = { ...item };
+    if (message.role === "system") message.role = "developer";
+    if (Array.isArray(message.content)) message.content = message.content.map((part: unknown) => {
+      if (!part || typeof part !== "object" || !("prompt_cache_breakpoint" in part)) return part;
+      const content: Record<string, unknown> = { ...part };
+      delete content.prompt_cache_breakpoint;
+      return content;
+    });
+    return message;
   });
   result.input = body.input;
   if (Array.isArray(body.tools)) {
@@ -54,7 +60,7 @@ export function planPayload(input: unknown): Record<string, unknown> {
     if (tools.some(tool => tool.type !== "function" && tool.type !== "custom")) {
       throw new Error("This tool is unavailable with the ChatGPT plan.");
     }
-    result.tools = tools.length ? [{ type: "namespace", name: "cloudflare_os", tools }] : [];
+    result.tools = tools.length ? [{ type: "namespace", name: "cloudflare_os", description: "Cloudflare OS local tools.", tools }] : [];
   }
   return result;
 }
@@ -251,9 +257,16 @@ export async function createChatGptBridge(options: {
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(600_000)]),
         });
-        if (!response.ok || !response.body) return json(res, response.ok ? 502 : response.status,
-          { error: { message: response.status === 429 ? "ChatGPT usage limit reached. Manage usage: https://chatgpt.com/settings/usage"
-            : `ChatGPT request failed (${response.status}). Retry or sign in again.` } });
+        if (!response.ok || !response.body) {
+          const failure = await response.json().catch(() => ({})) as { error?: { code?: unknown; param?: unknown } };
+          // Keep provider diagnostics useful without copying request values or provider prose into logs.
+          const detail = [failure.error?.code, failure.error?.param]
+            .filter((value): value is string => typeof value === "string" && /^[a-zA-Z0-9_.[\]-]{1,120}$/.test(value))
+            .join(" / ");
+          return json(res, response.ok ? 502 : response.status,
+            { error: { message: response.status === 429 ? "ChatGPT usage limit reached. Manage usage: https://chatgpt.com/settings/usage"
+              : `ChatGPT request failed (${response.status})${detail ? `: ${detail}` : ""}. Retry or sign in again.` } });
+        }
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         let pending = "";
         let terminal = false;
